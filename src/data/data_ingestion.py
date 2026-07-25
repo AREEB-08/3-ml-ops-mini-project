@@ -203,6 +203,10 @@ def save_data(
 # Main Function
 # ==========================================================
 
+# ==========================================================
+# Main Function
+# ==========================================================
+
 def main():
     """
     Execute the complete data ingestion pipeline.
@@ -210,37 +214,60 @@ def main():
 
     try:
 
-        # Load configuration
+        # --------------------------------------------------
+        # Project Constants
+        # --------------------------------------------------
+
+        DATASET_URL = (
+            "https://raw.githubusercontent.com/"
+            "campusx-official/jupyter-masterclass/main/"
+            "tweet_emotions.csv"
+        )
+
+        OUTPUT_PATH = "data"
+
+        # --------------------------------------------------
+        # Load Parameters
+        # --------------------------------------------------
+
         params = load_params("params.yaml")
 
-        data_params = params["data_ingestion"]
+        test_size = params["data_ingestion"]["test_size"]
 
-        test_size = data_params["test_size"]
+        logger.info("Data ingestion parameters loaded successfully.")
 
-        dataset_url = data_params["dataset_url"]
+        # --------------------------------------------------
+        # Load Dataset
+        # --------------------------------------------------
 
-        output_path = data_params["output_path"]
+        df = load_data(DATASET_URL)
 
-        # Load dataset
-        df = load_data(dataset_url)
+        # --------------------------------------------------
+        # Preprocess Dataset
+        # --------------------------------------------------
 
-        # Preprocess dataset
         final_df = preprocess_data(df)
 
-        # Split dataset
+        # --------------------------------------------------
+        # Split Dataset
+        # --------------------------------------------------
+
         train_data, test_data = train_test_split(
             final_df,
             test_size=test_size,
             random_state=42
         )
 
-        logger.info("Dataset split completed.")
+        logger.info("Dataset split completed successfully.")
 
-        # Save datasets
+        # --------------------------------------------------
+        # Save Dataset
+        # --------------------------------------------------
+
         save_data(
-            train_data,
-            test_data,
-            output_path
+            train_data=train_data,
+            test_data=test_data,
+            output_path=OUTPUT_PATH
         )
 
         logger.info("Data ingestion pipeline completed successfully.")
