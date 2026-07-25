@@ -1,0 +1,136 @@
+# ==========================================================
+# DVC Pipeline Configuration
+# ==========================================================
+# This file defines the complete Machine Learning pipeline.
+#
+# Pipeline Stages:
+#   1. Data Ingestion
+#   2. Data Preprocessing
+#   3. Feature Engineering
+#   4. Model Building
+#   5. Model Evaluation
+#
+# Notes:
+# - DVC automatically tracks dependencies and outputs.
+# - MLflow logs experiments during the evaluation stage.
+# - Model registration is performed manually through the
+#   DagsHub / MLflow UI.
+# ==========================================================
+
+stages:
+
+  # ========================================================
+  # Stage 1 : Data Ingestion
+  # --------------------------------------------------------
+  # Downloads the dataset, performs initial preprocessing,
+  # splits it into training and testing datasets, and saves
+  # them inside data/raw.
+  # ========================================================
+  data_ingestion:
+    cmd: python src/data/data_ingestion.py
+
+    deps:
+      - src/data/data_ingestion.py
+
+    params:
+      - data_ingestion.test_size
+
+    outs:
+      - data/raw/train.csv
+      - data/raw/test.csv
+
+
+  # ========================================================
+  # Stage 2 : Data Preprocessing
+  # --------------------------------------------------------
+  # Cleans and normalizes the text data by:
+  #   • Lowercase conversion
+  #   • Stopword removal
+  #   • Number removal
+  #   • URL removal
+  #   • Punctuation removal
+  #   • Lemmatization
+  # ========================================================
+  data_preprocessing:
+    cmd: python src/data/data_preprocessing.py
+
+    deps:
+      - data/raw/train.csv
+      - data/raw/test.csv
+      - src/data/data_preprocessing.py
+
+    outs:
+      - data/interim/train_processed.csv
+      - data/interim/test_processed.csv
+
+
+  # ========================================================
+  # Stage 3 : Feature Engineering
+  # --------------------------------------------------------
+  # Converts cleaned text into numerical features using
+  # Bag of Words (CountVectorizer).
+  #
+  # The trained vectorizer is also saved for inference.
+  # ========================================================
+  feature_engineering:
+    cmd: python src/features/feature_engineering.py
+
+    deps:
+      - data/interim/train_processed.csv
+      - data/interim/test_processed.csv
+      - src/features/feature_engineering.py
+
+    params:
+      - feature_engineering.max_features
+
+    outs:
+      - data/processed/train_bow.csv
+      - data/processed/test_bow.csv
+      - models/vectorizer.pkl
+
+
+  # ========================================================
+  # Stage 4 : Model Building
+  # --------------------------------------------------------
+  # Trains a Logistic Regression classifier using the
+  # feature-engineered training dataset.
+  # ========================================================
+  model_building:
+    cmd: python src/model/model_building.py
+
+    deps:
+      - data/processed/train_bow.csv
+      - src/model/model_building.py
+
+    outs:
+      - models/model.pkl
+
+
+  # ========================================================
+  # Stage 5 : Model Evaluation
+  # --------------------------------------------------------
+  # Evaluates the trained model using the test dataset.
+  #
+  # This stage:
+  #   • Calculates evaluation metrics
+  #   • Saves metrics.json
+  #   • Logs metrics to MLflow
+  #   • Logs model to MLflow
+  #   • Saves experiment information
+  #
+  # Model registration is performed manually from the
+  # DagsHub UI after this stage completes successfully.
+  # ========================================================
+  model_evaluation:
+    cmd: python src/model/model_evaluation.py
+
+    deps:
+      - models/model.pkl
+      - data/processed/test_bow.csv
+      - src/model/model_evaluation.py
+
+    metrics:
+      - reports/metrics.json
+
+    outs:
+      - reports/experiment_info.json
