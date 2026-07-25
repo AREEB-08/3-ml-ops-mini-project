@@ -26,7 +26,7 @@ from sklearn.metrics import (
 
 REPO_OWNER = "AREEB-08"
 REPO_NAME = "3-ml-ops-mini-project"
-EXPERIMENT_NAME = "Sentiment Analysis DVC Pipeline"
+EXPERIMENT_NAME = "Sentiment Analysis DVC Pipeline v1"
 MODEL_NAME = "LogisticRegression"
 
 # ==========================================================
@@ -272,10 +272,11 @@ def main():
             # Log model parameters
             mlflow.log_params(model.get_params())
 
-            # Log trained model artifact
+           # Log trained model artifact AND register it in one step
             mlflow.sklearn.log_model(
                 sk_model=model,
-                artifact_path="model"
+                artifact_path="model",
+                registered_model_name="sentiment-analysis-model"
             )
 
             # Log JSON artifacts
