@@ -1,0 +1,6 @@
+[core]
+    remote = origin
+['remote "origin"']
+    url = https://dagshub.com/AREEB-08/3-ml-ops-mini-project.dvc
+    auth = basic
+    user = AREEB-08
