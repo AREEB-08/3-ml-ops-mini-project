@@ -21,7 +21,7 @@ REGISTERED_MODEL_NAME = "sentiment-analysis-model"
 # Configure Logger
 # ==========================================================
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("model_registration")
 logger.setLevel(logging.INFO)
 
 if not logger.handlers:
@@ -43,47 +43,94 @@ if not logger.handlers:
 
 
 # ==========================================================
-# Register Model Function
+# Load Experiment Information
 # ==========================================================
 
-def register_model(model_name: str, experiment_info: dict):
+def load_experiment_info(file_path: str) -> dict:
     """
-    Register the logged model from the run into MLflow Registry and set alias.
+    Load experiment information saved during model evaluation.
+
+    Args:
+        file_path (str): Path of experiment_info.json.
+
+    Returns:
+        dict: Loaded metadata dictionary.
     """
     try:
-        run_id = experiment_info["run_id"]
-        model_uri = f"runs:/{run_id}/model"
+        with open(file_path, "r") as file:
+            experiment_info = json.load(file)
 
-        logger.info(f"Registering model from run_id '{run_id}' as '{model_name}'...")
-
-        # Register the model version
-        registered_model = mlflow.register_model(
-            model_uri=model_uri,
-            name=model_name
-        )
-
-        version = registered_model.version
-        logger.info(f"Model registered successfully! Assigned Version: {version}")
-
-        # Set Alias (@staging)
-        client = MlflowClient()
-        try:
-            client.set_registered_model_alias(
-                name=model_name,
-                alias="staging",
-                version=version
-            )
-            logger.info(f"Assigned alias '@staging' to model version {version}.")
-        except Exception as e:
-            logger.warning(f"Failed to set alias: {e}")
+        logger.info("Experiment information loaded successfully from %s", file_path)
+        return experiment_info
 
     except Exception:
-        logger.exception("Model registration failed.")
+        logger.exception("Unable to load experiment information from %s", file_path)
         raise
 
 
 # ==========================================================
-# Main Pipeline
+# Promote Model Version to Staging
+# ==========================================================
+
+def promote_model_to_staging(model_name: str, run_id: str):
+    """
+    Assign staging alias/stage to the latest registered model version for the run.
+
+    Args:
+        model_name (str): Registered model name in MLflow Registry.
+        run_id (str): MLflow Run ID created during evaluation.
+    """
+    try:
+        client = MlflowClient()
+
+        # Search for model versions linked to this model name
+        versions = client.search_model_versions(f"name='{model_name}'")
+
+        target_version = None
+        for v in versions:
+            if v.run_id == run_id:
+                target_version = v.version
+                break
+
+        # Fallback to the highest numeric version if run_id matching is delayed
+        if not target_version and versions:
+            target_version = str(max([int(v.version) for v in versions]))
+
+        if target_version:
+            logger.info("Updating stage and alias for model '%s' (Version %s)...", model_name, target_version)
+
+            # Assign @staging alias (Modern MLflow)
+            try:
+                client.set_registered_model_alias(
+                    name=model_name,
+                    alias="staging",
+                    version=target_version
+                )
+                logger.info("Assigned alias '@staging' to model version %s.", target_version)
+            except Exception as e:
+                logger.warning("Could not set alias: %s", e)
+
+            # Transition Stage to Staging (Legacy MLflow UI view compatibility)
+            try:
+                client.transition_model_version_stage(
+                    name=model_name,
+                    version=target_version,
+                    stage="Staging"
+                )
+                logger.info("Transitioned model version %s to 'Staging' stage.", target_version)
+            except Exception as e:
+                logger.warning("Stage transition skipped: %s", e)
+
+        else:
+            logger.warning("No registered versions found for model '%s'.", model_name)
+
+    except Exception:
+        logger.exception("Failed to promote model version.")
+        raise
+
+
+# ==========================================================
+# Main Pipeline Stage
 # ==========================================================
 
 def main():
@@ -93,7 +140,7 @@ def main():
     try:
         logger.info("Starting Model Registration Pipeline Stage...")
 
-        # Initialize DagsHub & MLflow tracking
+        # Initialize DagsHub tracking & authentication
         dagshub.init(
             repo_owner=REPO_OWNER,
             repo_name=REPO_NAME,
@@ -106,21 +153,27 @@ def main():
 
         logger.info("DagsHub initialized successfully.")
 
-        # Read run_id from reports/experiment_info.json
-        with open("./reports/experiment_info.json", "r") as f:
-            experiment_info = json.load(f)
+        # Load experiment metadata generated in model_evaluation
+        experiment_info = load_experiment_info("./reports/experiment_info.json")
 
-        # Register the model
-        register_model(REGISTERED_MODEL_NAME, experiment_info)
+        # Promote the registered version to Staging
+        promote_model_to_staging(
+            model_name=REGISTERED_MODEL_NAME,
+            run_id=experiment_info.get("run_id")
+        )
 
         logger.info("=" * 60)
         logger.info("Model Registration Pipeline Completed Successfully")
         logger.info("=" * 60)
 
     except Exception:
-        logger.exception("Model Registration Pipeline Failed.")
+        logger.exception("Model Registration Pipeline Stage Failed.")
         raise
 
+
+# ==========================================================
+# Driver Code
+# ==========================================================
 
 if __name__ == "__main__":
     main()
