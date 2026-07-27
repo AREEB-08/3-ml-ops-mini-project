@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Sentiment Analysis</title>
+    </head>
+
+    <body style="background-color: #2c3e50; color: white; font-family: Arial, sans-serif; text-align: center; padding-top: 50px;">
+        <h1>Sentiment Analysis</h1>
+        
+        <form action="/predict" method="POST">
+            <label style="font-size: 18px;">Enter text for analysis:</label><br><br>
+            <textarea name="text" rows="8" cols="45" style="font-size: 16px; padding: 10px; border-radius: 8px;" required></textarea><br><br>
+            <input type="submit" value="Predict Sentiment" style="font-size: 16px; padding: 10px 20px; cursor: pointer; border-radius: 5px;">
+        </form>
+
+        {% if result is not none %}
+            <br>
+            {% if result == 'Positive' or result == 1 %}
+                <h2 style="color: #2ecc71;">Prediction: Happy 😄</h2>
+            {% else %}
+                <h2 style="color: #e74c3c;">Prediction: Sad 😢</h2>
+            {% endif %}
+        {% endif %}
+    </body>
+</html>
