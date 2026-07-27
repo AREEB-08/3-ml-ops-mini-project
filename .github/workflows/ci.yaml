@@ -1,0 +1,59 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  project-testing:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # Checkout repository
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Install Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Upgrade pip
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      # Install dependencies
+      - name: Install Project Dependencies
+        run: pip install -r requirements.txt
+
+      # Verify DVC
+      - name: Verify DVC
+        run: dvc --version
+
+      # Configure DVC Remote Authentication
+      - name: Configure DVC
+        env:
+          DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
+        run: |
+          dvc remote modify origin --local auth basic
+          dvc remote modify origin --local user AREEB-08
+          dvc remote modify origin --local password "$DAGSHUB_TOKEN"
+
+      # Download data from DVC Remote
+      - name: Pull DVC Data
+        run: dvc pull
+
+      # Run complete ML pipeline
+      - name: Execute DVC Pipeline
+        run: dvc repro
+
+      - name: Success
+        run: echo "CI completed successfully."

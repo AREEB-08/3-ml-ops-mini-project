@@ -273,12 +273,18 @@ def main():
             mlflow.log_params(model.get_params())
 
            # Log trained model artifact AND register it in one step
+            # mlflow.sklearn.log_model(
+            #     sk_model=model,
+            #     artifact_path="model",
+            #     registered_model_name="sentiment-analysis-model"
+            # )
+#              
+            # new ml config so that it will not make new version and ci will not track them 
             mlflow.sklearn.log_model(
-                sk_model=model,
-                artifact_path="model",
-                registered_model_name="sentiment-analysis-model"
-            )
-
+                            sk_model=model,
+                            artifact_path="model",
+                            
+                        )
             # Log JSON artifacts
             mlflow.log_artifact("./reports/metrics.json")
             mlflow.log_artifact("./reports/experiment_info.json")
