@@ -135,9 +135,9 @@ stages:
   # Automates model registration into the MLflow Registry
   # on DagsHub and assigns a `@staging` alias to the run.
   # ========================================================
-  # model_registration:
-  #   cmd: python src/model/register_model.py
+  model_registration:
+    cmd: python src/model/register_model.py
 
-  #   deps:
-  #     - reports/experiment_info.json
-  #     - src/model/register_model.py
+    deps:
+      - reports/experiment_info.json
+      - src/model/register_model.py
