@@ -15,7 +15,9 @@
 
         {% if result is not none %}
             <br>
-            {% if result == 'Positive' or result == 1 %}
+            {% if result == 'Please enter text.' %}
+                <h3 style="color: #f39c12;">{{ result }}</h3>
+            {% elif result == 'Positive' or result == 1 %}
                 <h2 style="color: #2ecc71;">Prediction: Happy 😄</h2>
             {% else %}
                 <h2 style="color: #e74c3c;">Prediction: Sad 😢</h2>
