@@ -1,26 +1,17 @@
 # ==========================================================
-# GitHub Actions - Continuous Integration (CI)
+# GitHub Actions - Continuous Integration (CI) Workflow
 # ==========================================================
 #
 # Purpose
 # ----------------------------------------------------------
-# This workflow verifies that the complete Machine Learning
-# pipeline can run successfully on a fresh machine.
+# Verifies that the complete end-to-end Machine Learning pipeline 
+# executes cleanly, tracks experiments on DagsHub/MLflow, and 
+# passes all automated unit/model tests on a fresh runner.
 #
 # Trigger
 # ----------------------------------------------------------
 # • Every push to the main branch
-# • Every Pull Request to the main branch
-#
-# Workflow
-# ----------------------------------------------------------
-# 1. Checkout source code
-# 2. Setup Python
-# 3. Restore pip cache
-# 4. Install project dependencies
-# 5. Configure DVC authentication
-# 6. Pull data from DVC remote
-# 7. Execute complete DVC pipeline
+# • Every Pull Request targeting the main branch
 #
 # ==========================================================
 
@@ -39,7 +30,7 @@ on:
       - main
 
 # ----------------------------------------------------------
-# Jobs
+# Jobs Configuration
 # ----------------------------------------------------------
 jobs:
 
@@ -53,22 +44,16 @@ jobs:
       # =====================================================
       # Step 1 : Checkout Repository
       # -----------------------------------------------------
-      # Downloads the latest source code from GitHub.
+      # Downloads the latest source code from GitHub into the runner.
       # =====================================================
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       # =====================================================
-      # Step 2 : Setup Python
+      # Step 2 : Setup Python Environment
       # -----------------------------------------------------
-      # Installs Python and restores the pip cache.
-      #
-      # cache: pip
-      # ---------
-      # GitHub automatically caches downloaded Python
-      # packages. Future workflow runs become much faster
-      # because packages are restored from cache instead
-      # of downloading them again.
+      # Installs Python 3.12 and restores cached pip dependencies 
+      # to drastically speed up workflow execution times.
       # =====================================================
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -77,7 +62,7 @@ jobs:
           cache: "pip"
 
       # =====================================================
-      # Step 3 : Upgrade pip
+      # Step 3 : Upgrade pip Tooling
       # =====================================================
       - name: Upgrade pip
         run: |
@@ -86,8 +71,8 @@ jobs:
       # =====================================================
       # Step 4 : Install Project Dependencies
       # -----------------------------------------------------
-      # Installs all required Python packages listed in
-      # requirements.txt.
+      # Installs all required Python libraries (DVC, MLflow, 
+      # Scikit-learn, Dagshub, pytest, etc.) from requirements.txt.
       # =====================================================
       - name: Install Project Dependencies
         run: |
@@ -95,24 +80,18 @@ jobs:
 
       # =====================================================
       # Step 5 : Verify DVC Installation
-      # -----------------------------------------------------
-      # Prints the installed DVC version.
-      # Useful for debugging.
       # =====================================================
-      - name: Verify DVC
+      - name: Verify DVC Installation
         run: |
           dvc --version
 
       # =====================================================
       # Step 6 : Configure DVC Authentication
       # -----------------------------------------------------
-      # Configures authentication for the DagsHub DVC remote
-      # using GitHub Secrets.
-      #
-      # Secret Used:
-      # DAG_GIT_TOKEN
+      # Authenticates DVC against the DagsHub remote HTTP storage 
+      # using the stored GitHub secret DAG_GIT_TOKEN.
       # =====================================================
-      - name: Configure DVC
+      - name: Configure DVC Remote
         env:
           DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
         run: |
@@ -121,40 +100,45 @@ jobs:
           dvc remote modify origin --local password "$DAGSHUB_TOKEN"
 
       # =====================================================
-      # Step 7 : Pull Data from DVC Remote
+      # Step 7 : Pull Data & Model Tracked Files via DVC
       # -----------------------------------------------------
-      # Downloads all datasets, trained models and other
-      # DVC-tracked files required by the pipeline.
+      # Downloads raw datasets, interim files, and artifacts from 
+      # DagsHub storage into the local runner directory.
       # =====================================================
-      - name: Pull DVC Data
+      - name: Pull Data from DVC Remote
         run: |
           dvc pull
 
       # =====================================================
       # Step 8 : Execute Complete DVC Pipeline
       # -----------------------------------------------------
-      # Executes:
-      #
-      # Data Ingestion
-      #        ↓
-      # Data Preprocessing
-      #        ↓
-      # Feature Engineering
-      #        ↓
-      # Model Building
-      #        ↓
-      # Model Evaluation
-      #
-      # If any stage fails, GitHub Actions will stop
-      # immediately and mark the workflow as Failed.
+      # Runs end-to-end pipeline stages defined in dvc.yaml:
+      # Data Ingestion -> Preprocessing -> Feature Engineering 
+      # -> Model Building -> Model Evaluation.
+      # Logs parameters, metrics, and registered models to MLflow.
       # =====================================================
       - name: Execute DVC Pipeline
+        env:
+          DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
         run: |
           dvc repro
 
       # =====================================================
-      # Step 9 : Pipeline Completed
+      # Step 9 : Run Model & Pipeline Test Suite
+      # -----------------------------------------------------
+      # Runs automated unit and integration tests using pytest.
+      # Tests model loading from MLflow registry, input dimensions,
+      # end-to-end prediction sanity, and performance baselines.
       # =====================================================
-      - name: Success
+      - name: Run Model and Pipeline Tests
+        env:
+          DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
         run: |
-          echo "CI Pipeline executed successfully."
+          pytest tests/ -v
+
+      # =====================================================
+      # Step 10 : CI Completion Status
+      # =====================================================
+      - name: Pipeline Execution Summary
+        run: |
+          echo "CI Pipeline and Model Verification completed successfully!"
