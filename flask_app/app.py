@@ -35,12 +35,30 @@ REPO_OWNER = "AREEB-08"
 REPO_NAME = "3-ml-ops-mini-project"
 REGISTERED_MODEL_NAME = "sentiment-analysis-model"
 
-# Initialize DagsHub tracking
-dagshub.init(
-    repo_owner=REPO_OWNER,
-    repo_name=REPO_NAME,
-    mlflow=True
+# ----------------------------------------------------------
+# Token Authentication Setup for CI/CD & Production
+# ----------------------------------------------------------
+dagshub_token = (
+    os.getenv("DAGSHUB_TOKEN") 
+    or os.getenv("DAGSHUB_PAT") 
+    or os.getenv("DAGSHUB_USER_TOKEN")
 )
+
+if dagshub_token:
+    os.environ["DAGSHUB_USER_TOKEN"] = dagshub_token
+    os.environ["MLFLOW_TRACKING_USERNAME"] = dagshub_token
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = dagshub_token
+
+# Initialize DagsHub tracking non-interactively
+try:
+    dagshub.init(
+        repo_owner=REPO_OWNER,
+        repo_name=REPO_NAME,
+        mlflow=True
+    )
+    print("DagsHub tracking initialized successfully.")
+except Exception as e:
+    print(f"Warning: DagsHub initialization skipped/failed: {e}")
 
 mlflow.set_tracking_uri(
     f"https://dagshub.com/{REPO_OWNER}/{REPO_NAME}.mlflow"

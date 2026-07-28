@@ -13,6 +13,10 @@
 # • Every push to the main branch
 # • Every Pull Request targeting the main branch
 #
+# Secrets Required
+# ----------------------------------------------------------
+# • DAG_GIT_TOKEN: DagsHub Personal Access Token (PAT)
+#
 # ==========================================================
 
 name: CI Pipeline
@@ -55,7 +59,7 @@ jobs:
       # Installs Python 3.12 and restores cached pip dependencies 
       # to accelerate workflow execution speed.
       # =====================================================
-      - name: Setup Python
+      - name: Setup Python Environment
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -63,8 +67,10 @@ jobs:
 
       # =====================================================
       # Step 3 : Upgrade pip Tooling
+      # -----------------------------------------------------
+      # Ensures the package installer is updated to the latest version.
       # =====================================================
-      - name: Upgrade pip
+      - name: Upgrade Pip Tooling
         run: |
           python -m pip install --upgrade pip
 
@@ -80,6 +86,8 @@ jobs:
 
       # =====================================================
       # Step 5 : Verify DVC Installation
+      # -----------------------------------------------------
+      # Validates DVC binary installation on the runner.
       # =====================================================
       - name: Verify DVC Installation
         run: |
@@ -122,19 +130,25 @@ jobs:
       - name: Execute DVC Pipeline
         env:
           DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
+          DAGSHUB_USER_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
+          MLFLOW_TRACKING_USERNAME: AREEB-08
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAG_GIT_TOKEN }}
         run: |
           dvc repro
 
       # =====================================================
       # Step 9 : Run Automated Unit and Integration Tests
       # -----------------------------------------------------
-      # Runs pytest via 'python -m pytest' to discover and run all
-      # test files inside tests/ (test_model.py, test_flask_app.py).
-      # Validates model performance, signatures, and Flask endpoints.
+      # Discovers and runs all test modules inside tests/ 
+      # (test_model.py, test_flask_app.py) using pytest.
+      # Evaluates model performance, dimension shapes, and Flask endpoints.
       # =====================================================
       - name: Run Model and Flask App Tests
         env:
           DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
+          DAGSHUB_USER_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
+          MLFLOW_TRACKING_USERNAME: AREEB-08
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAG_GIT_TOKEN }}
         run: |
           python -m pytest tests/ -v
 
