@@ -6,7 +6,7 @@
 # ----------------------------------------------------------
 # Verifies that the complete end-to-end Machine Learning pipeline 
 # executes cleanly, tracks experiments on DagsHub/MLflow, and 
-# passes all automated unit/model tests on a fresh runner.
+# passes all automated unit/integration tests on a fresh runner.
 #
 # Trigger
 # ----------------------------------------------------------
@@ -36,7 +36,7 @@ jobs:
 
   project-testing:
 
-    # Runner Machine
+    # Runner Machine Environment
     runs-on: ubuntu-latest
 
     steps:
@@ -44,7 +44,7 @@ jobs:
       # =====================================================
       # Step 1 : Checkout Repository
       # -----------------------------------------------------
-      # Downloads the latest source code from GitHub into the runner.
+      # Clones the latest source code from GitHub into the runner.
       # =====================================================
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -53,7 +53,7 @@ jobs:
       # Step 2 : Setup Python Environment
       # -----------------------------------------------------
       # Installs Python 3.12 and restores cached pip dependencies 
-      # to drastically speed up workflow execution times.
+      # to accelerate workflow execution speed.
       # =====================================================
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -71,8 +71,8 @@ jobs:
       # =====================================================
       # Step 4 : Install Project Dependencies
       # -----------------------------------------------------
-      # Installs all required Python libraries (DVC, MLflow, 
-      # Scikit-learn, Dagshub, pytest, etc.) from requirements.txt.
+      # Installs all required Python packages (DVC, MLflow, 
+      # Scikit-learn, Flask, Dagshub, pytest, etc.) from requirements.txt.
       # =====================================================
       - name: Install Project Dependencies
         run: |
@@ -86,7 +86,7 @@ jobs:
           dvc --version
 
       # =====================================================
-      # Step 6 : Configure DVC Authentication
+      # Step 6 : Configure DVC Remote Authentication
       # -----------------------------------------------------
       # Authenticates DVC against the DagsHub remote HTTP storage 
       # using the stored GitHub secret DAG_GIT_TOKEN.
@@ -102,10 +102,12 @@ jobs:
       # =====================================================
       # Step 7 : Pull Data & Model Tracked Files via DVC
       # -----------------------------------------------------
-      # Downloads raw datasets, interim files, and artifacts from 
-      # DagsHub storage into the local runner directory.
+      # Downloads datasets and tracked artifacts from DagsHub 
+      # remote storage into the runner's workspace.
       # =====================================================
       - name: Pull Data from DVC Remote
+        env:
+          DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
         run: |
           dvc pull
 
@@ -124,21 +126,21 @@ jobs:
           dvc repro
 
       # =====================================================
-      # Step 9 : Run Model & Pipeline Test Suite
+      # Step 9 : Run Automated Unit and Integration Tests
       # -----------------------------------------------------
-      # Runs automated unit and integration tests using pytest.
-      # Tests model loading from MLflow registry, input dimensions,
-      # end-to-end prediction sanity, and performance baselines.
+      # Runs pytest via 'python -m pytest' to discover and run all
+      # test files inside tests/ (test_model.py, test_flask_app.py).
+      # Validates model performance, signatures, and Flask endpoints.
       # =====================================================
-      - name: Run Model and Pipeline Tests
+      - name: Run Model and Flask App Tests
         env:
           DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
         run: |
-          pytest tests/ -v
+          python -m pytest tests/ -v
 
       # =====================================================
-      # Step 10 : CI Completion Status
+      # Step 10 : CI Completion Status Summary
       # =====================================================
       - name: Pipeline Execution Summary
         run: |
-          echo "CI Pipeline and Model Verification completed successfully!"
+          echo "CI Pipeline execution and integration tests completed successfully!"
