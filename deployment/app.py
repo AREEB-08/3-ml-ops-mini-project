@@ -219,10 +219,12 @@ def predict():
     Predict sentiment of user input.
     """
 
+    # ---------------------------------------------
+    # Read User Input
+    # ---------------------------------------------
     user_text = request.form.get("text", "")
 
     if not user_text.strip():
-
         return render_template(
             "index.html",
             result="Please enter some text."
@@ -231,41 +233,45 @@ def predict():
     # ---------------------------------------------
     # Text Cleaning
     # ---------------------------------------------
-
     cleaned_text = normalize_text(user_text)
+
+    print("\n" + "=" * 60)
+    print("Original Text :", user_text)
+    print("Cleaned Text  :", cleaned_text)
 
     # ---------------------------------------------
     # Convert Text → Numerical Features
     # ---------------------------------------------
+    features = vectorizer.transform([cleaned_text])
 
-    features = vectorizer.transform(
-        [cleaned_text]
-    )
+    print("Feature Shape :", features.shape)
 
     # ---------------------------------------------
     # Predict
     # ---------------------------------------------
-
     prediction = model.predict(features)
 
+    print("Raw Prediction:", prediction)
+
     prediction = int(prediction[0])
+
+    print("Prediction Int:", prediction)
 
     # ---------------------------------------------
     # Convert Numeric Label to Text
     # ---------------------------------------------
-
     if prediction == 1:
         sentiment = "Positive 😊"
-
     else:
         sentiment = "Negative ☹️"
+
+    print("Displayed Result:", sentiment)
+    print("=" * 60 + "\n")
 
     return render_template(
         "index.html",
         result=sentiment
     )
-
-
 # ==========================================================
 # Application Entry Point
 # ==========================================================
