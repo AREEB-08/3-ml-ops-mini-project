@@ -6,12 +6,19 @@ import os
 import sys
 import unittest
 
-# Ensure the root directory is available in Python PATH for module lookup
+# ==========================================================
+# Add Project Root to Python Path
+# ==========================================================
+
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-# Clean, native package import matching your 'flask_app/' folder name
+# ==========================================================
+# Import Flask Application
+# ==========================================================
+
 from flask_app.app import app
 
 
@@ -20,81 +27,122 @@ class FlaskAppTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """
-        Configure Flask test client with test configuration flags.
+        Configure Flask application for testing.
         """
-        app.config['TESTING'] = True
-        app.config['WTF_CSRF_ENABLED'] = False
+        app.config["TESTING"] = True
+        app.config["WTF_CSRF_ENABLED"] = False
         cls.client = app.test_client()
 
     # ==========================================================
-    # 1. UI Endpoint Tests
+    # 1. Home Page Tests
     # ==========================================================
 
     def test_home_page_loads_successfully(self):
         """
-        Verify that the root endpoint '/' returns a 200 HTTP status code 
-        and renders the expected HTML title element.
+        Verify that the home page loads successfully and
+        contains the expected HTML title.
         """
-        response = self.client.get('/')
-        self.assertEqual(response.status_code, 200, "Home page failed to return HTTP 200.")
+        response = self.client.get("/")
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            "Home page failed to return HTTP 200."
+        )
+
         self.assertIn(
-            b'<title>Sentiment Analysis</title>', 
-            response.data, 
+            b"<title>Sentiment Analysis AI</title>",
+            response.data,
             "Title element missing from rendered HTML."
         )
 
     # ==========================================================
-    # 2. Prediction Inference Endpoint Tests
+    # 2. Prediction Endpoint Tests
     # ==========================================================
 
     def test_predict_positive_sentiment(self):
         """
-        Test end-to-end inference POST request for positive sentiment input.
+        Verify that a positive sentence returns
+        a Positive prediction.
         """
         response = self.client.post(
-            '/predict', 
-            data={'text': 'I absolutely love this product! It works so well and brings me huge joy.'},
-            follow_redirects=True
+            "/predict",
+            data={
+                "text": (
+                    "I absolutely love this product! "
+                    "It works so well and brings me huge joy."
+                )
+            },
+            follow_redirects=True,
         )
-        self.assertEqual(response.status_code, 200, "Prediction endpoint failed with non-200 status.")
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            "Prediction endpoint failed with non-200 status."
+        )
+
         self.assertIn(
-            b'Happy', 
-            response.data, 
-            "Expected 'Happy' prediction result in response HTML."
+            b"Positive",
+            response.data,
+            "Expected 'Positive' prediction result in response HTML."
         )
 
     def test_predict_negative_sentiment(self):
         """
-        Test end-to-end inference POST request for negative sentiment input.
+        Verify that a negative sentence returns
+        a Negative prediction.
         """
         response = self.client.post(
-            '/predict', 
-            data={'text': 'This is terrible and worst experience ever, completely broken and bad.'},
-            follow_redirects=True
+            "/predict",
+            data={
+                "text": (
+                    "This is terrible and the worst experience ever. "
+                    "Completely broken and bad."
+                )
+            },
+            follow_redirects=True,
         )
-        self.assertEqual(response.status_code, 200, "Prediction endpoint failed with non-200 status.")
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            "Prediction endpoint failed with non-200 status."
+        )
+
         self.assertIn(
-            b'Sad', 
-            response.data, 
-            "Expected 'Sad' prediction result in response HTML."
+            b"Negative",
+            response.data,
+            "Expected 'Negative' prediction result in response HTML."
         )
 
     def test_predict_empty_input_handling(self):
         """
-        Verify that submitting blank input text displays user warning message gracefully.
+        Verify that submitting blank input displays
+        a validation message.
         """
         response = self.client.post(
-            '/predict', 
-            data={'text': '   '},
-            follow_redirects=True
+            "/predict",
+            data={"text": "   "},
+            follow_redirects=True,
         )
-        self.assertEqual(response.status_code, 200)
+
+        self.assertEqual(
+            response.status_code,
+            200,
+            "Prediction endpoint failed with non-200 status."
+        )
+
         self.assertIn(
-            b'Please enter text.', 
-            response.data, 
-            "Expected validation warning message on empty input string."
+            b"Please enter text.",
+            response.data,
+            "Expected validation warning message on empty input."
         )
 
 
-if __name__ == '__main__':
+# ==========================================================
+# Test Runner
+# ==========================================================
+
+if __name__ == "__main__":
     unittest.main()
