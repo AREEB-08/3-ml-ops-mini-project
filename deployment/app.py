@@ -2,17 +2,29 @@
 # Sentiment Analysis Flask Application (Inference Only)
 # ==========================================================
 #
-# This application is used ONLY for inference (prediction).
+# Description
+# ----------------------------------------------------------
+# Lightweight web application built for serving real-time sentiment 
+# predictions. Runs strictly in inference mode without reliance on 
+# heavy MLOps tracking tools (DVC, MLflow, DagsHub) during runtime.
 #
-# It does NOT perform:
-#   - Model Training
-#   - MLflow Tracking
-#   - DVC Operations
-#   - DagsHub Authentication
+# Architecture Pipeline
+# ----------------------------------------------------------
+# User Request (Text)
+# └── Text Preprocessing (Normalize/Stopwords/Lemmatize)
+#     └── Vectorizer (TF-IDF Feature Transformation)
+#         └── Machine Learning Model (Classification Binary)
+#             └── Rendered Template Output (Jinja2)
 #
-# It simply processes:
-# User Input -> Text Preprocessing -> Vectorizer -> Model -> Prediction
-#
+# Project Layout
+# ----------------------------------------------------------
+# deployment/
+# ├── app.py
+# ├── models/
+# │   ├── model.pkl
+# │   └── vectorizer.pkl
+# └── templates/
+#     └── index.html
 # ==========================================================
 
 
@@ -25,7 +37,7 @@ import re
 import pickle
 
 import nltk
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for
 from nltk.corpus import stopwords, wordnet
 from nltk.stem import WordNetLemmatizer
 
@@ -34,13 +46,16 @@ from nltk.stem import WordNetLemmatizer
 # Download & Force Load Required NLTK Resources
 # ==========================================================
 
+# Silently download NLTK token and vocabulary dependencies
 nltk.download('wordnet', quiet=True)
 nltk.download('stopwords', quiet=True)
+
+# Ensure WordNet lexicon is fully initialized in memory prior to requests
 wordnet.ensure_loaded()
 
 
 # ==========================================================
-# Initialize Text Processing Objects
+# Global Objects & Utilities Initialization
 # ==========================================================
 
 lemmatizer = WordNetLemmatizer()
@@ -55,18 +70,10 @@ app = Flask(__name__)
 
 
 # ==========================================================
-# Model & Vectorizer Paths
+# Base Directory Resolution & Artifact Paths
 # ==========================================================
 
-# Directory Layout
-# deployment/
-# ├── app.py
-# ├── models/
-# │     ├── model.pkl
-# │     └── vectorizer.pkl
-# └── templates/
-#       └── index.html
-
+# Resolve root directory relative to current script location
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 MODEL_PATH = os.path.join(BASE_DIR, "models", "model.pkl")
@@ -74,61 +81,65 @@ VECTORIZER_PATH = os.path.join(BASE_DIR, "models", "vectorizer.pkl")
 
 
 # ==========================================================
-# Load Model and Vectorizer
+# Load Model and Feature Extractor Artifacts
 # ==========================================================
 
-print("Loading trained model...")
+print("Loading trained binary model artifact...")
 with open(MODEL_PATH, "rb") as file:
     model = pickle.load(file)
 print("Model loaded successfully.")
 
-print("Loading vectorizer...")
+print("Loading trained TF-IDF vectorizer artifact...")
 with open(VECTORIZER_PATH, "rb") as file:
     vectorizer = pickle.load(file)
 print("Vectorizer loaded successfully.")
 
 
 # ==========================================================
-# Text Preprocessing Functions
+# Text Preprocessing & Normalization Functions
 # ==========================================================
 
 def lower_case(text: str) -> str:
-    """Convert text to lowercase."""
+    """Convert input string characters to lowercase."""
     return " ".join([word.lower() for word in text.split()])
 
 
 def remove_stop_words(text: str) -> str:
-    """Remove English stopwords."""
+    """Filter out non-informative English stop words."""
     words = [word for word in str(text).split() if word not in stop_words]
     return " ".join(words)
 
 
 def remove_numbers(text: str) -> str:
-    """Remove numerical characters."""
+    """Strip all numeric digits from text."""
     return "".join([char for char in text if not char.isdigit()])
 
 
 def remove_urls(text: str) -> str:
-    """Remove URLs from text."""
+    """Remove standard HTTP/HTTPS and WWW hyperlinks using Regex."""
     url_pattern = re.compile(r"https?://\S+|www\.\S+")
     return url_pattern.sub("", text)
 
 
 def remove_punctuation(text: str) -> str:
-    """Remove punctuation symbols and extra spaces."""
+    """Strip punctuation symbols and collapse extra whitespace."""
     text = re.sub(r"[^\w\s]", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
 def lemmatize_text(text: str) -> str:
-    """Convert words into their base lemmatized form."""
+    """Reduce tokens to their core dictionary root forms (lemmas)."""
     words = text.split()
     return " ".join([lemmatizer.lemmatize(word) for word in words])
 
 
 def normalize_text(text: str) -> str:
-    """Complete preprocessing pipeline."""
+    """
+    Sequential text cleaning pipeline.
+    Applies lowercasing, stopword removal, digit stripping, 
+    URL removal, punctuation stripping, and lemmatization.
+    """
     text = lower_case(text)
     text = remove_stop_words(text)
     text = remove_numbers(text)
@@ -139,12 +150,15 @@ def normalize_text(text: str) -> str:
 
 
 # ==========================================================
-# Flask Routes
+# Flask Web Application Routes
 # ==========================================================
 
 @app.route("/")
 def home():
-    """Display the Home Page with clean initial state."""
+    """
+    Renders the primary application UI in a clean state.
+    Passes empty string for `user_text` to clear input textarea.
+    """
     return render_template(
         "index.html",
         result=None,
@@ -152,51 +166,48 @@ def home():
     )
 
 
-@app.route("/predict", methods=["POST"])
+@app.route("/predict", methods=["GET", "POST"])
 def predict():
-    """Predict sentiment class for incoming text and preserve user input."""
-    if request.method == "POST":
-        user_text = request.form.get("text", "")
+    """
+    Processes user input text and predicts sentiment polarity.
+    Redirects GET requests back to home route to prevent direct route access errors.
+    """
 
-        # Check for empty or whitespace-only input
-        if not user_text.strip():
-            return render_template(
-                "index.html",
-                result="Please enter text.",
-                user_text=user_text
-            )
+    # Redirect GET requests back to home page
+    if request.method == "GET":
+        return redirect(url_for("home"))
 
-        # Preprocess text
-        cleaned_text = normalize_text(user_text)
+    # Extract raw user input from form submission
+    user_text = request.form.get("text", "")
 
-        print("\n" + "=" * 60)
-        print("Original Text :", user_text)
-        print("Cleaned Text  :", cleaned_text)
-
-        # Convert Text -> Features
-        features = vectorizer.transform([cleaned_text])
-        features_array = features.toarray()
-
-        print("Feature Shape :", features_array.shape)
-
-        # Predict
-        prediction = model.predict(features_array)
-        raw_prediction = int(prediction[0])
-
-        print("Raw Prediction:", raw_prediction)
-
-        # Map label to template string: 1 = Positive, 0 = Negative
-        sentiment = "Positive" if raw_prediction == 1 else "Negative"
-
-        print("Displayed Result:", sentiment)
-        print("=" * 60 + "\n")
-
-        # Pass user_text back so <textarea> retains user input
+    # Validate non-empty payload input
+    if not user_text.strip():
         return render_template(
             "index.html",
-            result=sentiment,
+            result="Please enter text.",
             user_text=user_text
         )
+
+    # Clean and normalize raw user text
+    cleaned_text = normalize_text(user_text)
+
+    # Convert normalized string to sparse matrix and convert to dense array
+    features = vectorizer.transform([cleaned_text])
+    features_array = features.toarray()
+
+    # Predict class label using model
+    prediction = model.predict(features_array)
+    raw_prediction = int(prediction[0])
+
+    # Map output integer label to human-readable string: 1 -> Positive, 0 -> Negative
+    sentiment = "Positive" if raw_prediction == 1 else "Negative"
+
+    # Render template with prediction outcome and persist user text
+    return render_template(
+        "index.html",
+        result=sentiment,
+        user_text=user_text
+    )
 
 
 # ==========================================================
@@ -204,6 +215,7 @@ def predict():
 # ==========================================================
 
 if __name__ == "__main__":
+    # Launch application server exposing host across all network interfaces
     app.run(
         host="0.0.0.0",
         port=5000,
