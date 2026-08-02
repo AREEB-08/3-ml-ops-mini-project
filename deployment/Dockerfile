@@ -113,7 +113,7 @@ EXPOSE 5000
 # ==========================================================
 # Gunicorn is used instead of Flask's development server.
 #
-# 4 Workers
+# 1 Workers
 # Bind to all interfaces on port 5000.
 # ==========================================================
 

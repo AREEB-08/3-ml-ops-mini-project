@@ -10,21 +10,8 @@
 #   - DVC Operations
 #   - DagsHub Authentication
 #
-# It simply:
-#
-# User Input
-#      │
-#      ▼
-# Text Preprocessing
-#      │
-#      ▼
-# Vectorizer (vectorizer.pkl)
-#      │
-#      ▼
-# Trained Model (model.pkl)
-#      │
-#      ▼
-# Prediction
+# It simply processes:
+# User Input -> Text Preprocessing -> Vectorizer -> Model -> Prediction
 #
 # ==========================================================
 
@@ -44,14 +31,11 @@ from nltk.stem import WordNetLemmatizer
 
 
 # ==========================================================
-# Download Required NLTK Resources
+# Download & Force Load Required NLTK Resources
 # ==========================================================
 
-# These commands are safe to call repeatedly.
-# If the resources already exist, NLTK will not download them again.
-
-
-
+nltk.download('wordnet', quiet=True)
+nltk.download('stopwords', quiet=True)
 wordnet.ensure_loaded()
 
 
@@ -74,17 +58,14 @@ app = Flask(__name__)
 # Model & Vectorizer Paths
 # ==========================================================
 
-# Project Structure
-#
+# Directory Layout
 # deployment/
-# │
 # ├── app.py
 # ├── models/
 # │     ├── model.pkl
 # │     └── vectorizer.pkl
 # └── templates/
 #       └── index.html
-#
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -97,17 +78,13 @@ VECTORIZER_PATH = os.path.join(BASE_DIR, "models", "vectorizer.pkl")
 # ==========================================================
 
 print("Loading trained model...")
-
 with open(MODEL_PATH, "rb") as file:
     model = pickle.load(file)
-
 print("Model loaded successfully.")
 
 print("Loading vectorizer...")
-
 with open(VECTORIZER_PATH, "rb") as file:
     vectorizer = pickle.load(file)
-
 print("Vectorizer loaded successfully.")
 
 
@@ -116,85 +93,48 @@ print("Vectorizer loaded successfully.")
 # ==========================================================
 
 def lower_case(text: str) -> str:
-    """
-    Convert text to lowercase.
-    """
-    return text.lower()
+    """Convert text to lowercase."""
+    return " ".join([word.lower() for word in text.split()])
 
 
 def remove_stop_words(text: str) -> str:
-    """
-    Remove English stopwords.
-    """
-    words = [
-        word
-        for word in text.split()
-        if word not in stop_words
-    ]
+    """Remove English stopwords."""
+    words = [word for word in str(text).split() if word not in stop_words]
     return " ".join(words)
 
 
 def remove_numbers(text: str) -> str:
-    """
-    Remove numerical characters.
-    """
-    return "".join(
-        char
-        for char in text
-        if not char.isdigit()
-    )
+    """Remove numerical characters."""
+    return "".join([char for char in text if not char.isdigit()])
 
 
 def remove_urls(text: str) -> str:
-    """
-    Remove URLs from text.
-    """
-
-    url_pattern = re.compile(
-        r"https?://\S+|www\.\S+"
-    )
-
+    """Remove URLs from text."""
+    url_pattern = re.compile(r"https?://\S+|www\.\S+")
     return url_pattern.sub("", text)
 
 
 def remove_punctuation(text: str) -> str:
-    """
-    Remove punctuation symbols.
-    """
-
+    """Remove punctuation symbols and extra spaces."""
     text = re.sub(r"[^\w\s]", " ", text)
     text = re.sub(r"\s+", " ", text)
-
     return text.strip()
 
 
 def lemmatize_text(text: str) -> str:
-    """
-    Convert words into their base form.
-    """
-
+    """Convert words into their base lemmatized form."""
     words = text.split()
-
-    words = [
-        lemmatizer.lemmatize(word)
-        for word in words
-    ]
-
-    return " ".join(words)
+    return " ".join([lemmatizer.lemmatize(word) for word in words])
 
 
 def normalize_text(text: str) -> str:
-    """
-    Complete preprocessing pipeline.
-    """
-
+    """Complete preprocessing pipeline."""
     text = lower_case(text)
     text = remove_stop_words(text)
     text = remove_numbers(text)
     text = remove_urls(text)
     text = remove_punctuation(text)
     text = lemmatize_text(text)
-
     return text
 
 
@@ -204,80 +144,66 @@ def normalize_text(text: str) -> str:
 
 @app.route("/")
 def home():
-    """
-    Display the Home Page.
-    """
+    """Display the Home Page with clean initial state."""
     return render_template(
         "index.html",
-        result=None
+        result=None,
+        user_text=""
     )
 
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    """
-    Predict sentiment of user input.
-    """
+    """Predict sentiment class for incoming text and preserve user input."""
+    if request.method == "POST":
+        user_text = request.form.get("text", "")
 
-    # ---------------------------------------------
-    # Read User Input
-    # ---------------------------------------------
-    user_text = request.form.get("text", "")
+        # Check for empty or whitespace-only input
+        if not user_text.strip():
+            return render_template(
+                "index.html",
+                result="Please enter text.",
+                user_text=user_text
+            )
 
-    if not user_text.strip():
+        # Preprocess text
+        cleaned_text = normalize_text(user_text)
+
+        print("\n" + "=" * 60)
+        print("Original Text :", user_text)
+        print("Cleaned Text  :", cleaned_text)
+
+        # Convert Text -> Features
+        features = vectorizer.transform([cleaned_text])
+        features_array = features.toarray()
+
+        print("Feature Shape :", features_array.shape)
+
+        # Predict
+        prediction = model.predict(features_array)
+        raw_prediction = int(prediction[0])
+
+        print("Raw Prediction:", raw_prediction)
+
+        # Map label to template string: 1 = Positive, 0 = Negative
+        sentiment = "Positive" if raw_prediction == 1 else "Negative"
+
+        print("Displayed Result:", sentiment)
+        print("=" * 60 + "\n")
+
+        # Pass user_text back so <textarea> retains user input
         return render_template(
             "index.html",
-            result="Please enter some text."
+            result=sentiment,
+            user_text=user_text
         )
 
-    # ---------------------------------------------
-    # Text Cleaning
-    # ---------------------------------------------
-    cleaned_text = normalize_text(user_text)
 
-    print("\n" + "=" * 60)
-    print("Original Text :", user_text)
-    print("Cleaned Text  :", cleaned_text)
-
-    # ---------------------------------------------
-    # Convert Text → Numerical Features
-    # ---------------------------------------------
-    features = vectorizer.transform([cleaned_text])
-
-    print("Feature Shape :", features.shape)
-
-    # ---------------------------------------------
-    # Predict
-    # ---------------------------------------------
-    prediction = model.predict(features)
-
-    print("Raw Prediction:", prediction)
-
-    prediction = int(prediction[0])
-
-    print("Prediction Int:", prediction)
-
-    # ---------------------------------------------
-    # Convert Numeric Label to Text
-    # ---------------------------------------------
-    if prediction == 1:
-        sentiment = "Positive 😊"
-    else:
-        sentiment = "Negative ☹️"
-
-    print("Displayed Result:", sentiment)
-    print("=" * 60 + "\n")
-
-    return render_template(
-        "index.html",
-        result=sentiment
-    )
 # ==========================================================
 # Application Entry Point
 # ==========================================================
 
 if __name__ == "__main__":
-
     app.run(
         host="0.0.0.0",
         port=5000,

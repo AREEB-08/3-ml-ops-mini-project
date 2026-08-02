@@ -1,34 +1,11 @@
 # ==============================================================================
 # GitHub Actions - Continuous Integration & Continuous Deployment (CI/CD) Pipeline
 # ==============================================================================
-#
-# Pipeline Overview
-# ------------------------------------------------------------------------------
-# 1. Pipeline Execution: Runs unit tests, reproduces DVC pipelines, and tracks experiments on MLflow/DagsHub.
-# 2. Artifact Preparation: Bundles trained models/vectorizers for containerization.
-# 3. Container Management: Builds a versioned Docker image and pushes it to Docker Hub.
-# 4. Continuous Deployment: Deploys the latest Docker container automatically to AWS EC2 via SSH.
-#
-# Workflow Triggers
-# ------------------------------------------------------------------------------
-# • Pushes to the `main` branch (triggers full CI/CD deployment)
-# • Pull Requests targeting the `main` branch (triggers CI testing only)
-#
-# Secrets Required in GitHub Settings
-# ------------------------------------------------------------------------------
-# • DAG_GIT_TOKEN          : DagsHub Personal Access Token (PAT)
-# • DOCKER_HUB_USERNAME    : Docker Hub Account Username
-# • DOCKER_HUB_ACCESS_TOKEN: Docker Hub Access Token / Password
-# • EC2_HOST               : AWS EC2 Public IPv4 / DNS
-# • EC2_USERNAME           : SSH User (e.g., ubuntu, ec2-user)
-# • EC2_SSH_KEY            : Private Key (.pem) content for EC2 authentication
-#
-# ==============================================================================
 
 name: CI/CD Pipeline
 
 # ------------------------------------------------------------------------------
-# Triggers
+# Workflow Triggers
 # ------------------------------------------------------------------------------
 on:
   push:
@@ -51,53 +28,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ------------------------------------------------------------------------
       # Step 1: Checkout Repository
-      # Fetch complete history (`fetch-depth: 0`) for Git-based version tagging.
-      # ------------------------------------------------------------------------
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # ------------------------------------------------------------------------
       # Step 2: Setup Python Environment & Cache
-      # Configures Python 3.12 and restores cached pip dependencies to optimize speed.
-      # ------------------------------------------------------------------------
       - name: Setup Python Environment
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
 
-      # ------------------------------------------------------------------------
       # Step 3: Upgrade Pip
-      # Ensures wheel and pip installers are up-to-date.
-      # ------------------------------------------------------------------------
       - name: Upgrade Pip Tooling
         run: |
           python -m pip install --upgrade pip
 
-      # ------------------------------------------------------------------------
       # Step 4: Install Dependencies
-      # Installs requirement dependencies (DVC, MLflow, Scikit-learn, Flask, Pytest).
-      # ------------------------------------------------------------------------
       - name: Install Project Dependencies
         run: |
           pip install -r requirements.txt
 
-      # ------------------------------------------------------------------------
       # Step 5: Verify DVC Installation
-      # Confirms DVC CLI binary availability on runner workspace.
-      # ------------------------------------------------------------------------
       - name: Verify DVC Installation
         run: |
           dvc --version
 
-      # ------------------------------------------------------------------------
       # Step 6: Configure DVC Remote Credentials
-      # Configures basic HTTP authentication for DagsHub remote data storage.
-      # ------------------------------------------------------------------------
       - name: Configure DVC Remote
         env:
           DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
@@ -106,35 +65,25 @@ jobs:
           dvc remote modify origin --local user AREEB-08
           dvc remote modify origin --local password "$DAGSHUB_TOKEN"
 
-      # ------------------------------------------------------------------------
       # Step 7: Pull Data Artifacts from DagsHub
-      # Retrieves remote cached datasets and model dependencies tracked by DVC.
-      # ------------------------------------------------------------------------
       - name: Pull Data from DVC Remote
         env:
           DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
         run: |
           dvc pull
 
-      # ------------------------------------------------------------------------
       # Step 8: Reproduce DVC Pipeline & Track Metrics
-      # Runs end-to-end data pipelines (`dvc repro`) and logs metrics/artifacts
-      # into DagsHub MLflow remote server.
-      # ------------------------------------------------------------------------
       - name: Execute DVC Pipeline
         env:
           DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
           DAGSHUB_USER_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
           MLFLOW_TRACKING_USERNAME: AREEB-08
           MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAG_GIT_TOKEN }}
-          MLFLOW_TRACKING_URI: https://dagshub.com/AREEB-08/basic_ed.mlflow
+          MLFLOW_TRACKING_URI: https://dagshub.com/AREEB-08/3-ml-ops-mini-project.mlflow
         run: |
           dvc repro
 
-      # ------------------------------------------------------------------------
       # Step 9: Prepare Deployment Artifacts
-      # Copies newly trained model binaries into docker build sub-directory.
-      # ------------------------------------------------------------------------
       - name: Prepare Deployment Artifacts
         run: |
           mkdir -p deployment/models
@@ -150,33 +99,24 @@ jobs:
           echo "Deployment artifacts copied successfully."
           ls -lh deployment/models/
 
-      # ------------------------------------------------------------------------
       # Step 10: Execute Automated Test Suite
-      # Runs PyTest unit & integration tests for model validation and API endpoints.
-      # ------------------------------------------------------------------------
       - name: Run Model and Flask App Tests
         env:
           DAGSHUB_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
           DAGSHUB_USER_TOKEN: ${{ secrets.DAG_GIT_TOKEN }}
           MLFLOW_TRACKING_USERNAME: AREEB-08
           MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAG_GIT_TOKEN }}
-          MLFLOW_TRACKING_URI: https://dagshub.com/AREEB-08/basic_ed.mlflow
+          MLFLOW_TRACKING_URI: https://dagshub.com/AREEB-08/3-ml-ops-mini-project.mlflow
         run: |
           python -m pytest tests/ -v
 
-      # ------------------------------------------------------------------------
       # Step 11: Calculate Version Tag
-      # Generates a persistent version counter based on total Git commit count.
-      # ------------------------------------------------------------------------
       - name: Get Total Commit Count for Versioning
         id: vars
         run: |
           echo "commit_count=$(git rev-list --count HEAD)" >> $GITHUB_OUTPUT
 
-      # ------------------------------------------------------------------------
       # Step 12: CI Execution Summary
-      # Displays execution feedback and target tag prior to container creation.
-      # ------------------------------------------------------------------------
       - name: Pipeline Execution Summary
         run: |
           echo "=========================================="
@@ -187,10 +127,7 @@ jobs:
           echo " Container Version Tag: v${{ steps.vars.outputs.commit_count }}"
           echo "=========================================="
 
-      # ------------------------------------------------------------------------
       # Step 13: Authenticate to Docker Hub
-      # Login to Docker registry using GitHub encrypted secrets.
-      # ------------------------------------------------------------------------
       - name: Login to Docker Hub
         if: github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
@@ -198,11 +135,7 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      # ------------------------------------------------------------------------
       # Step 14: Build & Push Docker Image
-      # Containerizes the API app with the deployment models and uploads to Docker Hub.
-      # Builds tags for both specific version (e.g., :v15) and floating latest tag (:latest).
-      # ------------------------------------------------------------------------
       - name: Build and Push Docker Image
         if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v5
@@ -213,28 +146,23 @@ jobs:
             ${{ secrets.DOCKER_HUB_USERNAME }}/basic_ed:v${{ steps.vars.outputs.commit_count }}
             ${{ secrets.DOCKER_HUB_USERNAME }}/basic_ed:latest
 
-# ============================================================================
-# JOB 2: Continuous Deployment (CD to AWS EC2)
+  # ============================================================================
+  # JOB 2: Continuous Deployment (CD to AWS EC2)
   # ============================================================================
   deploy:
     name: Continuous Deployment (AWS EC2)
-
     needs: project-testing
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
     steps:
-      # ------------------------------------------------------------------------
       # Step 1: Connect to EC2 Server & Update Running Container
-      # ------------------------------------------------------------------------
       - name: Deploy latest Docker image to EC2
         uses: appleboy/ssh-action@v1.2.0
-
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-
           script: |
             # Pull latest Docker image
             sudo docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/basic_ed:latest
@@ -256,6 +184,5 @@ jobs:
             # Remove unused images
             sudo docker image prune -af
 
-            # Verify deployment
+            # Verify deployment status
             sudo docker ps
- 

@@ -166,18 +166,19 @@ with open(VECTORIZER_PATH, "rb") as f:
 
 @app.route('/')
 def home():
-    """Render main web interface."""
-    return render_template('index.html', result=None)
+    """Render main web interface with clean initial state."""
+    return render_template('index.html', result=None, user_text="")
 
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    """Predict sentiment class for incoming text."""
+    """Predict sentiment class for incoming text and preserve user input."""
     if request.method == 'POST':
         raw_text = request.form.get('text', '')
 
+        # Check for empty or whitespace-only inputs
         if not raw_text.strip():
-            return render_template('index.html', result="Please enter text.")
+            return render_template('index.html', result="Please enter text.", user_text=raw_text)
 
         # Clean input text
         clean_text = normalize_text(raw_text)
@@ -193,7 +194,8 @@ def predict():
         # Map label: 1 = Positive (happiness), 0 = Negative (sadness)
         prediction_label = "Positive" if raw_prediction == 1 else "Negative"
 
-        return render_template('index.html', result=prediction_label)
+        # Pass user_text back so the textarea keeps what the user typed
+        return render_template('index.html', result=prediction_label, user_text=raw_text)
 
 
 # ==========================================================
